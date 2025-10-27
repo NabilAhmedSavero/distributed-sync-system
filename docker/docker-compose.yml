@@ -1,0 +1,85 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: docker-redis-1
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    networks:
+      - dist_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  node1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    container_name: docker-node1-1
+    command: sh -c "python main.py || tail -f /dev/null"
+    ports:
+      - "8001:8001"
+    environment:
+      - NODE_TYPE=cache
+      - NODE_ID=node1
+      - HOST=0.0.0.0
+      - PORT=8001
+      - CLUSTER_NODES=node1:node1:8001,node2:node2:8002,node3:node3:8003
+      - REDIS_HOST=redis
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dist_net
+
+  node2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    container_name: docker-node2-1
+    command: sh -c "python main.py || tail -f /dev/null"
+    ports:
+      - "8002:8002"
+    environment:
+      - NODE_TYPE=cache
+      - NODE_ID=node2
+      - HOST=0.0.0.0
+      - PORT=8002
+      - CLUSTER_NODES=node1:node1:8001,node2:node2:8002,node3:node3:8003
+      - REDIS_HOST=redis
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dist_net
+
+  node3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    container_name: docker-node3-1
+    command: sh -c "python main.py || tail -f /dev/null"
+    ports:
+      - "8003:8003"
+    environment:
+      - NODE_TYPE=cache
+      - NODE_ID=node3
+      - HOST=0.0.0.0
+      - PORT=8003
+      - CLUSTER_NODES=node1:node1:8001,node2:node2:8002,node3:node3:8003
+      - REDIS_HOST=redis
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dist_net
+
+networks:
+  dist_net:
+    driver: bridge

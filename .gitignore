@@ -1,0 +1,15 @@
+# Python virtual environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Environment files 
+.env
+.env.*
+# exception env example
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db

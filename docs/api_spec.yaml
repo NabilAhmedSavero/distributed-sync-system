@@ -1,0 +1,177 @@
+openapi: 3.0.0
+info:
+  title: Distributed Synchronization System API
+  version: 1.0.0
+  description: Dokumentasi API untuk Lock Manager, Queue, dan Cache System.
+
+servers:
+  - url: http://localhost:8001
+    description: Node 1
+  - url: http://localhost:8002
+    description: Node 2
+  - url: http://localhost:8003
+    description: Node 3
+
+paths:
+  # --- Lock Manager API ---
+  /lock/acquire:
+    post:
+      summary: Mengambil (acquire) sebuah distributed lock
+      description: Request ini harus dikirim ke node yang sedang menjadi LEADER Raft.
+      tags: [LockManager]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resource_id: { type: string, example: "resource_A" }
+                mode: { type: string, enum: [shared, exclusive], example: "exclusive" }
+                requester_id: { type: string, example: "client-123" }
+      responses:
+        '200':
+          description: Lock berhasil didapat
+          content:
+            application/json: { example: {"status": "acquired"} }
+        '408':
+          description: Lock sedang dipegang dan request timeout
+          content:
+            application/json: { example: {"status": "timeout_or_failed"} }
+        '503':
+          description: Request dikirim ke node yang bukan Leader
+          content:
+            application/json: { example: {"status": "error", "message": "Raft not ready or not leader"} }
+
+  /lock/release:
+    post:
+      summary: Melepaskan (release) sebuah distributed lock
+      description: Request ini harus dikirim ke node yang sedang menjadi LEADER Raft.
+      tags: [LockManager]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resource_id: { type: string, example: "resource_A" }
+                owner_id: { type: string, example: "client-123" }
+      responses:
+        '200':
+          description: Lock berhasil dilepas
+          content:
+            application/json: { example: {"status": "released"} }
+        '400':
+          description: Gagal melepas lock (misal, bukan pemiliknya)
+          content:
+            application/json: { example: {"status": "failed_not_owner_or_not_locked"} }
+              
+  /lock/status:
+    get:
+      summary: Melihat status semua lock yang aktif
+      tags: [LockManager]
+      responses:
+        '200':
+          description: Daftar semua lock dan statusnya
+
+  # --- Queue System API ---
+  /queue/publish:
+    post:
+      summary: Mempublikasi pesan ke sebuah topic
+      tags: [QueueSystem]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topic: { type: string, example: "topic-A" }
+                message: { type: object, example: {"data": "isi pesan"} }
+      responses:
+        '200':
+          description: Pesan berhasil dipublikasi atau di-forward
+          content:
+            application/json: { example: {"status": "published", "message_id": "1678886400000-0"} }
+
+  /queue/consume:
+    post:
+      summary: Mengambil pesan dari sebuah topic untuk consumer group
+      tags: [QueueSystem]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topic: { type: string, example: "topic-A" }
+                consumer_group: { type: string, example: "grup-A" }
+                consumer_id: { type: string, example: "worker-1" }
+      responses:
+        '200':
+          description: Daftar pesan (bisa kosong jika tidak ada pesan baru)
+          content:
+            application/json: { example: {"status": "ok", "messages": [{"id": "1678886400000-0", "data": {...}}] } }
+
+  /queue/ack:
+    post:
+      summary: Memberi konfirmasi (acknowledge) bahwa pesan telah diproses
+      tags: [QueueSystem]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topic: { type: string, example: "topic-A" }
+                consumer_group: { type: string, example: "grup-A" }
+                message_id: { type: string, example: "1678886400000-0" }
+      responses:
+        '200':
+          description: Pesan berhasil di-acknowledge
+          content:
+            application/json: { example: {"status": "acknowledged"} }
+
+  # --- Cache Coherence API ---
+  /cache/write:
+    post:
+      summary: Menulis data ke cache (dan memori utama)
+      tags: [CacheCoherence]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address: { type: string, example: "kunci_A" }
+                value: { type: string, example: "data_rahasia" }
+      responses:
+        '200':
+          description: Data berhasil ditulis
+          content:
+            application/json: { example: {"status": "written", "address": "kunci_A", "value": "data_rahasia"} }
+
+  /cache/read:
+    get:
+      summary: Membaca data dari cache
+      tags: [CacheCoherence]
+      parameters:
+        - name: address
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "kunci_A"
+      responses:
+        '200':
+          description: Data ditemukan di cache (Hit)
+          content:
+            application/json: { example: {"status": "hit", "address": "kunci_A", "value": "data_rahasia"} }
+        '404':
+          description: Data tidak ditemukan (Miss)
+          content:
+            application/json: { example: {"status": "miss", "address": "kunci_A", "value": null} }
